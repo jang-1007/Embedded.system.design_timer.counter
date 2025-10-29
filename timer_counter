@@ -1,0 +1,178 @@
+// 12230617 황주영 임베디드 시스템 설계 7주차 과제
+// youtube link: https://youtu.be/Oggn7m0b5nQ
+// 과제:
+// File name : sketch_12230617_timer_counter.ino
+// 결선:
+//<Arduino MEGA 2560 ↔ Peripheral Board 핀 연결>
+//Arduino MEGA 2560  → Peripheral Board
+// PB5 (핀 번호 11)  → LED8 (버저 신호 출력 핀)
+// 설명: 
+//이 코드는 Timer/Counter 기능을 활용해 OC1A 출력의 주파수를 제어함으로써 특정 음을 생성하고, 이를 조합해 음악을 연주하는 프로그램이다.
+//연주되는 곡은 ‘고향의 봄’, play_music 함수와 rest 함수를 통해 각 음의 주파수(음높이)와 지속 시간(음길이)을 제어하여 곡을 재생한다.
+//사운드는 Peripheral Board에 장착된 버저(Buzzer)를 통해 출력된다.
+//동작:
+//1. Timer/Counter를 CTC(Compare Match) 모드로 설정한다.
+//2. OC1A 핀의 출력이 Compare Match 시 토글 되도록 설정한다.
+//3. Prescaler는 주파수 조정을 위해 8로 설정한다.
+//4. play_music() 함수를 사용하여 각 음을 원하는 길이만큼 재생한다.
+//5. rest() 함수를 통해 쉼표 구간(무음 구간)을 구현한다.
+
+
+#include <Arduino.h>
+
+// BPM = 88 → Quarter note ≈ 682 ms
+
+static const uint16_t WHOLE_MS      = 2727; // 온음표   ≈ 2.727 s
+static const uint16_t HALF_MS       = 1364; // 2분음표  ≈ 1.364 s
+static const uint16_t DOTHALF_MS    = 2045; // 점2분    ≈ 2.045 s
+static const uint16_t QUARTER_MS    =  682; // 4분      ≈ 0.682 s
+static const uint16_t EIGHTH_MS     =  341; // 8분      ≈ 0.341 s
+static const uint16_t QUARTER_REST  =  682; // 4분쉼표
+
+static const uint16_t SCALE_C      = 3821;
+static const uint16_t SCALE_D      = 3404;
+static const uint16_t SCALE_E      = 3033;
+static const uint16_t SCALE_F      = 2863;
+static const uint16_t SCALE_G      = 2550;
+static const uint16_t SCALE_A      = 2272;
+static const uint16_t SCALE_B      = 2024;
+static const uint16_t SCALE_HIGHC  = 1910;
+static const uint16_t SCALE_HIGHD  = 1702;
+static const uint16_t SCALE_HIGHE  = 1520;
+
+// 음 사이의 짧은 간격
+static const uint8_t  GAP_DIV      = 40;
+
+void play_music(uint16_t ocr1a_value, uint16_t length_ms);
+void rest_ms(uint16_t length_ms);
+
+void setup() {
+  // OC1A 핀(PB5) 출력 설정
+  DDRB |= _BV(DDB5);
+
+  // Timer1 : CTC 모드(WGM13:0 = 0100)
+  // TCCR1A: WGM11=0, WGM10=0
+  TCCR1A &= ~(_BV(WGM11) | _BV(WGM10));
+  // TCCR1B: WGM13=0, WGM12=1
+  TCCR1B &= ~_BV(WGM13);
+  TCCR1B |=  _BV(WGM12);
+
+  // Compare Output Mode on OC1A : Toggle (COM1A1:0 = 01)
+  TCCR1A &= ~_BV(COM1A1);
+  TCCR1A |=  _BV(COM1A0);
+
+  // Prescaler : 8 (CS12:0 = 010)
+  TCCR1B &= ~_BV(CS12);
+  TCCR1B |=  _BV(CS11);
+  TCCR1B &= ~_BV(CS10);
+
+  // 카운터 초기화
+  TCNT1 = 0;
+}
+
+void loop() {
+  // 1줄
+  play_music(SCALE_G, QUARTER_MS);
+  play_music(SCALE_G, QUARTER_MS);
+  play_music(SCALE_E, EIGHTH_MS);
+  play_music(SCALE_F, EIGHTH_MS);
+  play_music(SCALE_G, QUARTER_MS);
+
+  play_music(SCALE_A, QUARTER_MS);
+  play_music(SCALE_A, QUARTER_MS);
+  play_music(SCALE_G, HALF_MS);
+
+  play_music(SCALE_G, QUARTER_MS);
+  play_music(SCALE_HIGHC, QUARTER_MS);
+  play_music(SCALE_HIGHE, QUARTER_MS);
+  play_music(SCALE_HIGHD, EIGHTH_MS);
+  play_music(SCALE_HIGHC, EIGHTH_MS);
+
+  play_music(SCALE_HIGHD, DOTHALF_MS);
+  rest_ms(QUARTER_REST);
+
+  // 2줄
+  play_music(SCALE_HIGHE, QUARTER_MS);
+  play_music(SCALE_HIGHE, QUARTER_MS);
+  play_music(SCALE_HIGHD, QUARTER_MS);
+  play_music(SCALE_HIGHD, QUARTER_MS);
+
+  play_music(SCALE_HIGHC, QUARTER_MS);
+  play_music(SCALE_HIGHD, EIGHTH_MS);
+  play_music(SCALE_HIGHC, EIGHTH_MS);
+  play_music(SCALE_A, QUARTER_MS);
+  play_music(SCALE_A, QUARTER_MS);
+
+  play_music(SCALE_G, QUARTER_MS);
+  play_music(SCALE_G, QUARTER_MS);
+  play_music(SCALE_G, QUARTER_MS);
+  play_music(SCALE_E, EIGHTH_MS);
+  play_music(SCALE_D, EIGHTH_MS);
+
+  play_music(SCALE_C, DOTHALF_MS);
+  rest_ms(QUARTER_REST);
+
+  // 3줄
+  play_music(SCALE_D, QUARTER_MS);
+  play_music(SCALE_D, QUARTER_MS);
+  play_music(SCALE_E, QUARTER_MS);
+  play_music(SCALE_C, QUARTER_MS);
+
+  play_music(SCALE_D, QUARTER_MS);
+  play_music(SCALE_D, QUARTER_MS);
+  play_music(SCALE_E, QUARTER_MS);
+  play_music(SCALE_G, QUARTER_MS);
+
+  play_music(SCALE_A, QUARTER_MS);
+  play_music(SCALE_HIGHC, QUARTER_MS);
+  play_music(SCALE_HIGHE, QUARTER_MS);
+  play_music(SCALE_HIGHD, EIGHTH_MS);
+  play_music(SCALE_HIGHC, EIGHTH_MS);
+
+  play_music(SCALE_HIGHD, DOTHALF_MS);
+  rest_ms(QUARTER_REST);
+
+  // 4줄
+  play_music(SCALE_HIGHE, QUARTER_MS);
+  play_music(SCALE_HIGHE, QUARTER_MS);
+  play_music(SCALE_HIGHD, QUARTER_MS);
+  play_music(SCALE_HIGHD, QUARTER_MS);
+
+  play_music(SCALE_HIGHC, QUARTER_MS);
+  play_music(SCALE_HIGHD, EIGHTH_MS);
+  play_music(SCALE_HIGHC, EIGHTH_MS);
+  play_music(SCALE_A, QUARTER_MS);
+  play_music(SCALE_A, QUARTER_MS);
+
+  play_music(SCALE_G, QUARTER_MS);
+  play_music(SCALE_G, QUARTER_MS);
+  play_music(SCALE_G, QUARTER_MS);
+  play_music(SCALE_E, EIGHTH_MS);
+  play_music(SCALE_D, EIGHTH_MS);
+
+  play_music(SCALE_C, DOTHALF_MS);
+  rest_ms(QUARTER_REST);
+}
+
+// 재생 / 쉼표 함수 
+void play_music(uint16_t ocr1a_value, uint16_t length_ms) {
+  // TOP 설정 및 카운터 초기화
+  OCR1A = ocr1a_value;
+  TCNT1 = 0;
+
+  // OC1A 토글 상태로 재생
+  TCCR1A &= ~_BV(COM1A1);
+  TCCR1A |=  _BV(COM1A0);
+
+  delay(length_ms);
+
+  // 음 사이 간격을 위해 일시적으로 OC1A 비활성
+  TCCR1A &= ~(_BV(COM1A1) | _BV(COM1A0));
+  delay(length_ms / GAP_DIV);
+}
+
+void rest_ms(uint16_t length_ms) {
+  // 완전 무음을 위해 OC1A 비활성
+  TCCR1A &= ~(_BV(COM1A1) | _BV(COM1A0));
+  delay(length_ms);
+}
